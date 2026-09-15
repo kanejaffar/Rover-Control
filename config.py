@@ -1,9 +1,9 @@
 # Controller settings
 DEADZONE = 0.10
-SCALING = 0 # 0 = linear, greater number = more exponential
+SCALING = 2 # 0 = linear, greater number = more exponential
 
 # Scheme settings
-SCHEME = "ACKERMANN"
+SCHEME = 'ACK'
 
 # Motor settings
 MAX_STEER = 90
