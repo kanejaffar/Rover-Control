@@ -155,6 +155,8 @@ def set_motor_speed(name, speed):
 
 def update(commands):
 
+    display(commands)
+
     try:
 
         set_steer_angle('FLA', commands['FLA'])
