@@ -41,14 +41,22 @@ def set_motor_speed(name, speed):
 
 
 def update(commands):
-    set_steer_angle('FLA', commands['FLA'])
-    set_steer_angle('FRA', commands['FRA'])
-    set_steer_angle('RLA', commands['RLA'])
-    set_steer_angle('RRA', commands['RRA'])
-    set_motor_speed('FLS', commands['FLS'])
-    set_motor_speed('FRS', commands['FRS'])
-    set_motor_speed('RLS', commands['RLS'])
-    set_motor_speed('RRS', commands['RRS'])
+    print()
+    for motor in commands:
+        print(f"{motor}: {commands[motor]:.2f}")
+
+    try:
+        set_steer_angle('FLA', commands['FLA'])
+        set_steer_angle('FRA', commands['FRA'])
+        set_steer_angle('RLA', commands['RLA'])
+        set_steer_angle('RRA', commands['RRA'])
+        set_motor_speed('FLS', commands['FLS'])
+        set_motor_speed('FRS', commands['FRS'])
+        set_motor_speed('RLS', commands['RLS'])
+        set_motor_speed('RRS', commands['RRS'])
+    except:
+        print('Bypassing motors')
+
 
 def display(commands):
     print()

@@ -11,6 +11,6 @@ while True:
     inputs = input.update()
     commands = control.update(inputs)
     output.update(commands)
-    output.display(commands)
-    clock.tick(4)  # Samples per second
+    #output.display(commands)
+    clock.tick(30)  # Samples per second
     

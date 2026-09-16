@@ -188,7 +188,7 @@ def update():
         elif axis in [4, 5]:
             inputs[axis_map[axis]] = scale(deadzone((joystick.get_axis(axis) + 1) / 2))
 
-        print(f'{inputs[axis_map[axis]]=}')
+        print(f'{axis} = {inputs[axis_map[axis]]}')
 
     # Buttons
     for button in button_map:
