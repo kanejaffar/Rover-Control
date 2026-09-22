@@ -1,185 +1,258 @@
-import pigpio
+import gpiod
 import config
+import threading
+import time
 
 
-# ---------------------------------------------------------
-# GPIO setup
-# ---------------------------------------------------------
-
-pi = pigpio.pi()
-
-if not pi.connected:
-    print("pigpio not available. Running in simulation mode.")
-    pi = None
+# ============================================================
+# GPIO configuration
+# ============================================================
 
 
-# ---------------------------------------------------------
-# GPIO pins
-# ---------------------------------------------------------
 
-STEER_PINS = {
-    'FLA': 8, #PWM
-    'FRA': 9,
-    'RLA': 10,
-    'RRA': 11
+
+# ============================================================
+# PWM configuration
+# ============================================================
+
+SERVO_FREQUENCY = 50
+SERVO_PERIOD = 1 / SERVO_FREQUENCY
+
+SERVO_MIN_US = 500
+SERVO_MAX_US = 2500
+
+
+MOTOR_FREQUENCY = 500
+MOTOR_PERIOD = 1 / MOTOR_FREQUENCY
+
+
+# ============================================================
+# State
+# ============================================================
+
+angles = {
+    "FLA": 0,
+    "FRA": 0,
+    "RLA": 0,
+    "RRA": 0,
 }
 
-DRIVE_PINS = {
-    'FLS': (18, 19, 4), #IN1, IN2, EN
-    'FRS': (20, 21, 5),
-    'RLS': (22, 23, 6),
-    'RRS': (24, 25, 7)
-}
-
-
-# ---------------------------------------------------------
-# Servo configuration
-# ---------------------------------------------------------
-
-MIN_PULSE_WIDTH = 500
-MAX_PULSE_WIDTH = 2500
-
-MIN_SERVO_ANGLE = -90
-MAX_SERVO_ANGLE = 90
-
-
-# ---------------------------------------------------------
-# Servo state
-# ---------------------------------------------------------
-
-current_angles = {
-    'FLA': None,
-    'FRA': None,
-    'RLA': None,
-    'RRA': None
+speeds = {
+    "FLS": 0,
+    "FRS": 0,
+    "RLS": 0,
+    "RRS": 0,
 }
 
 
-# ---------------------------------------------------------
-# Convert angle to pulse width
-# ---------------------------------------------------------
+# ============================================================
+# Find GPIO chip
+# ============================================================
 
-def angle_to_pulse(angle_deg):
+def find_gpio_chip():
 
-    angle_deg = max(
-        MIN_SERVO_ANGLE,
-        min(MAX_SERVO_ANGLE, angle_deg)
-    )
+    for i in range(10):
 
-    pulse_range = MAX_PULSE_WIDTH - MIN_PULSE_WIDTH
-    angle_range = MAX_SERVO_ANGLE - MIN_SERVO_ANGLE
+        try:
+            chip = gpiod.Chip(f"/dev/gpiochip{i}")
+            info = chip.get_info()
 
-    pulse = MIN_PULSE_WIDTH + (
-        (angle_deg - MIN_SERVO_ANGLE)
-        * pulse_range
-        / angle_range
-    )
+            if "bcm2835" in info.name.lower() or "rp1" in info.name.lower():
+                return chip
 
-    return int(pulse)
+            chip.close()
+
+        except OSError:
+            pass
+
+    raise RuntimeError("Could not find Raspberry Pi GPIO chip")
 
 
-# ---------------------------------------------------------
-# Set steering servo angle
-# ---------------------------------------------------------
+GPIO_CHIP = find_gpio_chip()
 
-def set_steer_angle(name, angle_deg):
 
-    angle_deg = max(
-        -config.MAX_STEER,
-        min(config.MAX_STEER, angle_deg)
-    )
+# ============================================================
+# Convert steering angle to servo pulse width
+# ============================================================
 
-    # Don't send another command if the angle hasn't changed.
-    if (
-        current_angles[name] is not None
-        and abs(angle_deg - current_angles[name]) < 0.5
-    ):
-        return
+def angle_to_pulse(angle):
 
-    current_angles[name] = angle_deg
+    angle = max(-90, min(90, angle))
 
-    if pi is None:
-        return
-
-    pulse = angle_to_pulse(angle_deg)
-
-    pi.set_servo_pulsewidth(
-        STEER_PINS[name],
-        pulse
+    return (
+        SERVO_MIN_US
+        + (angle + 90) / 180
+        * (SERVO_MAX_US - SERVO_MIN_US)
     )
 
 
-# ---------------------------------------------------------
-# Set drive motor speed
-# ---------------------------------------------------------
+# ============================================================
+# Set requested values
+# ============================================================
+
+def set_steer_angle(name, angle):
+
+    angle = max(-config.MAX_STEER,
+                min(config.MAX_STEER, angle))
+
+    angles[name] = angle
+
 
 def set_motor_speed(name, speed):
 
-    speed = max(
-        -config.MAX_SPEED,
-        min(config.MAX_SPEED, speed)
+    speed = max(-config.MAX_SPEED,
+                min(config.MAX_SPEED, speed))
+
+    speeds[name] = speed
+
+
+# ============================================================
+# Servo PWM
+# ============================================================
+
+def servo_pwm():
+
+    pins = list(config.STEERING_PINS.values())
+
+    settings = gpiod.LineSettings(
+        direction=gpiod.line.Direction.OUTPUT,
+        output_value=gpiod.line.Value.INACTIVE
     )
 
-    if pi is None:
-        return
-
-    forward_pin, backward_pin, enable_pin = DRIVE_PINS[name]
-
-    # Convert speed to 0.0 - 1.0
-    speed_normalised = abs(speed) / config.MAX_SPEED
-
-    # Set direction
-    if speed > 0:
-        pi.write(forward_pin, 1)
-        pi.write(backward_pin, 0)
-
-    elif speed < 0:
-        pi.write(forward_pin, 0)
-        pi.write(backward_pin, 1)
-
-    else:
-        pi.write(forward_pin, 0)
-        pi.write(backward_pin, 0)
-
-    # Hardware PWM
-    pi.hardware_PWM(
-        enable_pin,
-        1000,
-        int(speed_normalised * 1_000_000)
+    request = GPIO_CHIP.request_lines(
+        consumer="rover-servo",
+        config={tuple(pins): settings}
     )
 
+    next_cycle = time.monotonic_ns()
 
-# ---------------------------------------------------------
-# Update all outputs
-# ---------------------------------------------------------
+    while True:
+
+        # Start of 20 ms servo frame
+        next_cycle += int(SERVO_PERIOD * 1e9)
+
+        for name, pin in config.STEERING_PINS.items():
+
+            pulse_us = angle_to_pulse(angles[name])
+            pulse_time = pulse_us / 1_000_000
+
+            request.set_value(
+                pin,
+                gpiod.line.Value.ACTIVE
+            )
+
+            time.sleep(pulse_time)
+
+            request.set_value(
+                pin,
+                gpiod.line.Value.INACTIVE
+            )
+
+        # Wait for next frame
+        remaining = next_cycle - time.monotonic_ns()
+
+        if remaining > 0:
+            time.sleep(remaining / 1e9)
+
+
+# ============================================================
+# Motor PWM
+# ============================================================
+
+def motor_pwm():
+
+    pins = []
+
+    for in1, in2, enable in config.MOTOR_PINS.values():
+        pins.extend([in1, in2, enable])
+
+    settings = gpiod.LineSettings(
+        direction=gpiod.line.Direction.OUTPUT,
+        output_value=gpiod.line.Value.INACTIVE
+    )
+
+    request = GPIO_CHIP.request_lines(
+        consumer="rover-motors",
+        config={tuple(pins): settings}
+    )
+
+    period_ns = int(MOTOR_PERIOD * 1e9)
+    next_cycle = time.monotonic_ns()
+
+    while True:
+
+        next_cycle += period_ns
+
+        for name, (in1, in2, enable) in config.MOTOR_PINS.items():
+
+            speed = speeds[name]
+
+            # Direction
+            if speed > 0:
+                request.set_value(in1, gpiod.line.Value.ACTIVE)
+                request.set_value(in2, gpiod.line.Value.INACTIVE)
+
+            elif speed < 0:
+                request.set_value(in1, gpiod.line.Value.INACTIVE)
+                request.set_value(in2, gpiod.line.Value.ACTIVE)
+
+            else:
+                request.set_value(in1, gpiod.line.Value.INACTIVE)
+                request.set_value(in2, gpiod.line.Value.INACTIVE)
+
+            # PWM
+            duty = abs(speed) / config.MAX_SPEED
+
+            request.set_value(
+                enable,
+                gpiod.line.Value.ACTIVE
+            )
+
+            time.sleep(duty * MOTOR_PERIOD)
+
+            request.set_value(
+                enable,
+                gpiod.line.Value.INACTIVE
+            )
+
+        remaining = next_cycle - time.monotonic_ns()
+
+        if remaining > 0:
+            time.sleep(remaining / 1e9)
+
+
+# ============================================================
+# Initialise
+# ============================================================
+
+def initialise():
+
+    servo_thread = threading.Thread(
+        target=servo_pwm,
+        daemon=True
+    )
+
+    motor_thread = threading.Thread(
+        target=motor_pwm,
+        daemon=True
+    )
+
+    servo_thread.start()
+    motor_thread.start()
+
+
+# ============================================================
+# Main output function
+# ============================================================
 
 def update(commands):
 
-    display(commands)
+    set_steer_angle("FLA", commands["FLA"])
+    set_steer_angle("FRA", commands["FRA"])
+    set_steer_angle("RLA", commands["RLA"])
+    set_steer_angle("RRA", commands["RRA"])
 
-    try:
-
-        set_steer_angle('FLA', commands['FLA'])
-        set_steer_angle('FRA', commands['FRA'])
-        set_steer_angle('RLA', commands['RLA'])
-        set_steer_angle('RRA', commands['RRA'])
-
-        set_motor_speed('FLS', commands['FLS'])
-        set_motor_speed('FRS', commands['FRS'])
-        set_motor_speed('RLS', commands['RLS'])
-        set_motor_speed('RRS', commands['RRS'])
-
-    except Exception as e:
-        print(f'Output error: {e}')
-
-
-# ---------------------------------------------------------
-# Display commands
-# ---------------------------------------------------------
-
-def display(commands):
-
-    print()
-
-    for motor in commands:
-        print(f"{motor}: {commands[motor]:.2f}")
+    set_motor_speed("FLS", commands["FLS"])
+    set_motor_speed("FRS", commands["FRS"])
+    set_motor_speed("RLS", commands["RLS"])
+    set_motor_speed("RRS", commands["RRS"])

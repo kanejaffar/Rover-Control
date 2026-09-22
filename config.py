@@ -15,16 +15,16 @@ LENGTH = 101
 
 # Steering servos
 STEER_PINS = {
-    "FLA": 8,
-    "FRA": 9,
-    "RLA": 10,
-    "RRA": 11
+    "FLA": 7,
+    "FRA": 5,
+    "RLA": 3,
+    "RRA": 8
 }
 
 # Drive motor pins
 MOTOR_PINS = {
-    "FLS": (18, 19, 4),
-    "FRS": (20, 21, 5),
-    "RLS": (22, 23, 6),
-    "RRS": (24, 25, 7)
+    "FLS": (37, 35, 33), #IN1, IN2, EN/PWM
+    "FRS": (31, 29, 27),
+    "RLS": (23, 21, 19),
+    "RRS": (15, 13, 11)
 }
