@@ -8,9 +8,12 @@ clock = pygame.time.Clock()
 input.initialise()
 
 while True:
-    inputs = input.update()
-    commands = control.update(inputs)
-    output.update(commands)
-    #output.display(commands)
-    clock.tick(30)  # Samples per second
-    
+    try:
+        inputs = input.update()
+        commands = control.update(inputs)
+        output.update(commands)
+        clock.tick(30)  # Samples per second
+    except KeyboardInterrupt:
+        output.shutdown()
+        exit()
+        sys.exit()
