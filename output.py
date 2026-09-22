@@ -1,14 +1,9 @@
 from gpiozero import AngularServo, Motor
 import config
 
-
-# ============================================================
-# Steering motors
-# ============================================================
-
 steering = {
     "FLA": AngularServo(
-        8,
+        config.STEER_PINS["FLA"],
         min_angle=-90,
         max_angle=90,
         min_pulse_width=0.0005,
@@ -17,7 +12,7 @@ steering = {
     ),
 
     "FRA": AngularServo(
-        9,
+        config.STEER_PINS["FRA"],
         min_angle=-90,
         max_angle=90,
         min_pulse_width=0.0005,
@@ -26,7 +21,7 @@ steering = {
     ),
 
     "RLA": AngularServo(
-        10,
+        config.STEER_PINS["RLA"],
         min_angle=-90,
         max_angle=90,
         min_pulse_width=0.0005,
@@ -35,7 +30,7 @@ steering = {
     ),
 
     "RRA": AngularServo(
-        11,
+        config.STEER_PINS["RRA"],
         min_angle=-90,
         max_angle=90,
         min_pulse_width=0.0005,
@@ -44,45 +39,35 @@ steering = {
     )
 }
 
-
-# ============================================================
-# Drive motors
-# ============================================================
-
 motors = {
     "FLS": Motor(
-        forward=18,
-        backward=19,
-        enable=4,
+        forward=config.MOTOR_PINS["FLS"][0],
+        backward=config.MOTOR_PINS["FLS"][1],
+        enable=config.MOTOR_PINS["FLS"][2],
         pwm=True
     ),
 
     "FRS": Motor(
-        forward=20,
-        backward=21,
-        enable=5,
+        forward=config.MOTOR_PINS["FRS"][0],
+        backward=config.MOTOR_PINS["FRS"][1],
+        enable=config.MOTOR_PINS["FRS"][2],
         pwm=True
     ),
 
     "RLS": Motor(
-        forward=22,
-        backward=23,
-        enable=6,
+        forward=config.MOTOR_PINS["RLS"][0],
+        backward=config.MOTOR_PINS["RLS"][1],
+        enable=config.MOTOR_PINS["RLS"][2],
         pwm=True
     ),
 
     "RRS": Motor(
-        forward=24,
-        backward=25,
-        enable=7,
+        forward=config.MOTOR_PINS["RRS"][0],
+        backward=config.MOTOR_PINS["RRS"][1],
+        enable=config.MOTOR_PINS["RRS"][2],
         pwm=True
     )
 }
-
-
-# ============================================================
-# Initialise
-# ============================================================
 
 def initialise():
 
@@ -91,11 +76,6 @@ def initialise():
 
     for motor in motors.values():
         motor.stop()
-
-
-# ============================================================
-# Set steering angle
-# ============================================================
 
 def set_steer_angle(name, angle):
 
@@ -106,11 +86,6 @@ def set_steer_angle(name, angle):
 
     steering[name].angle = angle
 
-
-# ============================================================
-# Set motor speed
-# ============================================================
-
 def set_motor_speed(name, speed):
 
     speed = max(
@@ -118,15 +93,9 @@ def set_motor_speed(name, speed):
         min(config.MAX_SPEED, speed)
     )
 
-    # Convert to GPIO Zero's -1 to +1 range
     speed = speed / config.MAX_SPEED
 
     motors[name].value = speed
-
-
-# ============================================================
-# Update all outputs
-# ============================================================
 
 def update(commands):
 
@@ -139,11 +108,6 @@ def update(commands):
     set_motor_speed("FRS", commands["FRS"])
     set_motor_speed("RLS", commands["RLS"])
     set_motor_speed("RRS", commands["RRS"])
-
-
-# ============================================================
-# Shutdown
-# ============================================================
 
 def shutdown():
 
